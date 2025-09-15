@@ -9,8 +9,8 @@ const ObjectRecognitionSystem = () => {
   const [commonFeatures, setCommonFeatures] = useState(new Set());
   const [trained, setTrained] = useState(false);
   
-  const [currentStep, setCurrentStep] = useState('training'); // 'training', 'recognition'
-  const [trainingStep, setTrainingStep] = useState(1); // 1: names, 2: features
+  const [currentStep, setCurrentStep] = useState('training'); 
+  const [trainingStep, setTrainingStep] = useState(1); 
   
   const [obj1Input, setObj1Input] = useState('');
   const [obj2Input, setObj2Input] = useState('');
@@ -212,47 +212,68 @@ const ObjectRecognitionSystem = () => {
     setShowConfirmation(true);
   };
 
-  // Підтвердження результату
+
   const handleConfirmation = (isCorrect) => {
     setShowConfirmation(false);
-    
-    if (isCorrect) {
-      updateFeatures(recognitionResult.unknownFeatures, recognitionResult.predictedObject);
-    } else {
-      setSelectedCorrection(object1Name);
-      setShowCorrection(true);
+  
+    if (!recognitionResult) return;
+  
+    const predictedObject = recognitionResult.predictedObject;
+    const unknownFeatures = recognitionResult.unknownFeatures;
+  
+    let correctObject = predictedObject;
+  
+    if (!isCorrect) {
+      // Є лише 2 класи, тому правильний об'єкт – це той, який не був обраний
+      correctObject = predictedObject === object1Name ? object2Name : object1Name;
     }
+  
+    // Навчання у будь-якому випадку
+    updateFeatures(unknownFeatures, correctObject);
+  
+    // Очищуємо поле для нового введення
+    setUnknownFeaturesInput('');
+    setRecognitionResult(null);
   };
+  
 
   // Оновлення ознак при правильному висновку
+  
   const updateFeatures = (unknownFeatures, correctObject) => {
     const unknownSet = new Set(unknownFeatures);
-    const allExistingFeatures = new Set([...object1Features, ...object2Features, ...commonFeatures]);
-    
-    let newFeatures = new Set();
-    
-    if (correctObject === object1Name) {
-      newFeatures = new Set([...unknownSet].filter(f => !allExistingFeatures.has(f)));
-      if (newFeatures.size > 0) {
-        setObject1Features(prev => new Set([...prev, ...newFeatures]));
+  
+    // Всі ознаки інших об'єктів
+    const otherObject = correctObject === object1Name ? object2Name : object1Name;
+    const correctFeatures = correctObject === object1Name ? object1Features : object2Features;
+    const otherFeatures = correctObject === object1Name ? object2Features : object1Features;
+  
+    let newFeaturesAdded = [];
+  
+    unknownSet.forEach(f => {
+      if (!correctFeatures.has(f) && !commonFeatures.has(f)) {
+        if (otherFeatures.has(f)) {
+          // якщо ознака є у іншого об'єкта → переносимо у спільні ознаки
+          otherFeatures.delete(f);
+          setCommonFeatures(prev => new Set([...prev, f]));
+        } else {
+          correctFeatures.add(f);
+          newFeaturesAdded.push(f);
+        }
       }
-    } else if (correctObject === object2Name) {
-      newFeatures = new Set([...unknownSet].filter(f => !allExistingFeatures.has(f)));
-      if (newFeatures.size > 0) {
-        setObject2Features(prev => new Set([...prev, ...newFeatures]));
-      }
-    }
-    
-    if (newFeatures.size > 0) {
-      addNotification(`Додано нові ознаки до ${correctObject}: ${Array.from(newFeatures).join(', ')}`, 'success');
-    } else {
-      addNotification('Всі ознаки вже існували в базі знань. Нові ознаки не додано.', 'info');
-    }
-    
+    });
+  
+    addNotification(
+      newFeaturesAdded.length > 0
+        ? `Додано нові ознаки до ${correctObject}: ${newFeaturesAdded.join(', ')}`
+        : 'Всі ознаки вже існували або перенесені у спільні ознаки.',
+      'success'
+    );
+  
     saveData();
     setUnknownFeaturesInput('');
     setRecognitionResult(null);
   };
+  
 
   // Самонавчання при помилковому висновку
   const handleSelfLearning = () => {
@@ -616,56 +637,7 @@ const ObjectRecognitionSystem = () => {
           </div>
         )}
 
-        {/* Модальне вікно корекції */}
-        {showCorrection && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Вказання правильної відповіді</h3>
-              <p className="mb-4">Яка правильна відповідь?</p>
-              <div className="space-y-3 mb-6">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="correction"
-                    value={object1Name}
-                    checked={selectedCorrection === object1Name}
-                    onChange={(e) => setSelectedCorrection(e.target.value)}
-                    className="text-blue-600"
-                  />
-                  <span>{object1Name}</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="correction"
-                    value={object2Name}
-                    checked={selectedCorrection === object2Name}
-                    onChange={(e) => setSelectedCorrection(e.target.value)}
-                    className="text-blue-600"
-                  />
-                  <span>{object2Name}</span>
-                </label>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSelfLearning}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Підтвердити
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCorrection(false);
-                    setRecognitionResult(null);
-                  }}
-                  className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
-                >
-                  Скасувати
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+       
       </div>
     </div>
   );
